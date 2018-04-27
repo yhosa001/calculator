@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="ISO-8859-1">
+<title>Calculator</title>
+<script type="text/javascript">
+	window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || 
+	window.msIndexedDB;
+	 
+	window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction || 
+	window.msIDBTransaction;
+	window.IDBKeyRange = window.IDBKeyRange || 
+	window.webkitIDBKeyRange || window.msIDBKeyRange
+	 
+	if (!window.indexedDB) {
+	   window.alert("Your browser doesn't support a stable version of IndexedDB.")
+	}
+	
+	var counter = localStorage.getItem('count');
+	const calHistory = [];
+	var db;
+    var request = window.indexedDB.open("newDatabase", 1);
+	var onLoad = true;
+	request.onerror = function(event) {
+		console.log("error: ");
+	};
+     
+	request.onsuccess = function(event) {
+		db = request.result;
+		console.log("success: "+ db);
+	};
+	request.onupgradeneeded = function(event) {
+		var db = event.target.result;
+		var objectStore = db.createObjectStore("history", {keyPath: "id"});
+
+		for (var i in calHistory) {
+			objectStore.add(calHistory[i]);
+		}
+	}
+
+	var firstVariable;
+	var secondVariable;
+	var result;
+	var operator;
+	var arrayHistory = [];
+	var addArrayHistory = false;
+	
+	//Performs Addition of two numbers
+	function calAddition(){
+		operator = "+";
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		document.calculator.calDisplay.value = "";
+		document.calculator.calDisplay2.value = firstVariable + operator;
+	}
+	
+	//Performs Substraction of two numbers
+	function calSubstraction(){
+		operator = "-";
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		document.calculator.calDisplay.value = "";
+		document.calculator.calDisplay2.value = firstVariable + operator;
+	}
+	
+	//Performs Multiplication of two numbers
+	function calMultiplication(){
+		operator = "*";
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		document.calculator.calDisplay.value = "";
+		document.calculator.calDisplay2.value = firstVariable + operator;
+	}
+	
+	//Performs Division of two numbers
+	function calDivision(){
+		operator = "/";
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		document.calculator.calDisplay.value = "";
+		document.calculator.calDisplay2.value = firstVariable + operator;
+	}
+	
+	//Performs Squareroot of a number
+	function calSquareRoot(){
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		result = Math.sqrt(parseFloat(document.calculator.calDisplay.value));
+		document.calculator.calDisplay.value = result ;
+		document.calculator.calDisplay2.value = "sqrt(" + firstVariable + ") = "+result;
+		add(document.calculator.calDisplay2.value);
+		return;
+	}
+	
+	//Performs exponential operation
+	function calExponential(){
+		operator = "^";
+		firstVariable = parseFloat(document.calculator.calDisplay.value);
+		document.calculator.calDisplay.value = "";
+		document.calculator.calDisplay2.value = firstVariable + operator;
+		
+	}
+	
+	//Clears the display text fields
+	function calClear(){
+		document.calculator.calDisplay.value = " ";
+		document.calculator.calDisplay2.value = "";
+		return;
+	}
+	
+	//Operations based on selected operator is performed
+	function calEquals(){
+		secondVariable = parseFloat(document.calculator.calDisplay.value);
+		if (operator == "+"){
+			result = firstVariable + secondVariable;
+		}else if (operator == "-"){
+			result = firstVariable - secondVariable;
+		}else if (operator == "/"){
+			result = firstVariable / secondVariable;
+		}else if (operator == "*"){
+			result = firstVariable * secondVariable;
+		}else if (operator == "^"){
+			result = 1;
+			for(var i = 0; i< secondVariable ; i++){
+				result *= firstVariable;
+			}
+		}
+		document.calculator.calDisplay.value =" ";  
+		document.calculator.calDisplay.value = result.toString();  
+		document.calculator.calDisplay2.value = firstVariable + operator + secondVariable + " = " + result.toString();    
+		add(document.calculator.calDisplay2.value);
+		return;
+	}
+	
+	//Add the data to the indexedDB
+	function add(data){
+		var request = db.transaction(["history"], "readwrite")
+			.objectStore("history").add({id:counter++,calValue:data});
+		
+		localStorage.setItem('count',counter);
+		
+		request.onsuccess = function(event) {
+			//alert("added to your database.");
+		};
+
+		request.onerror = function(event) {
+			alert("unable to add data");
+		}
+		getHistoryCount(invokeHistory);
+	}
+	
+	//Invoked by History button to fetch the recent 10 data from the indexedDB
+	function calRead(calClearAll){
+		var objectStore = db.transaction("history").objectStore("history");
+		var i = 0;
+		var j = 0;
+		objectStore.openCursor().onsuccess = function(event) {
+			var cursor = event.target.result;
+			if (cursor) {
+				if(addArrayHistory){
+					if(i!= 0){
+						arrayHistory[j++] = cursor.value.calValue;
+					}
+					i++;
+				}else {
+					alert(cursor.value.calValue);
+				}
+			  cursor.continue();
+			} else {
+				if(addArrayHistory){
+					addFromArrayToDB();
+				}else{
+					alert("No more entries!");
+				}
+			}
+		};
+	}
+	function addFromArrayToDB(){
+		calClearAll();
+		for (i = 0; i < 10; i++) {
+			add(arrayHistory[i])
+		}
+		addArrayHistory = false;
+	}
+	
+	//Invoked by clear button to clear the complete history
+	function calClearAll(){
+		var objectStore = db.transaction(["history"], "readwrite").objectStore("history");
+		var objectStoreRequest = objectStore.clear();
+		
+		counter = 0;
+		localStorage.setItem('count',0);
+	}
+	
+	//To get the count of data present in database
+	function getHistoryCount(invokeHistory){
+		var transaction = db.transaction(['history'], 'readonly');
+		var objectStore = transaction.objectStore('history');
+
+		var countRequest = objectStore.count();
+		countRequest.onsuccess = function() {
+			invokeHistory(countRequest.result);
+		}
+	}
+	function invokeHistory(historyCount){
+		if(historyCount >10){
+			//alert("Data exceeded the max limit");
+			addArrayHistory = true;
+			calRead(calClearAll);
+		}
+	}
+</script>
+</head>
+<body style="background-color:#8c8c8c">
+	<h1 align = "center" style = "background-color:#b3b3b3; width: 100%">Calculator</h1>
+	<form name="calculator"  >
+		<table  align="center" width="20%" height="50%" id="calTable" style="border: black; background-color:#cccccc">
+			<tr>
+				<td>
+					<input type="text" id="calDisplay2" name="calDisplay2" disabled="disabled" style="width:100%">
+					<input type="text" id="calDisplay" name="calDisplay" disabled="disabled" style="width:100%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="one" value="1" type="button" onclick="calculator.calDisplay.value += 1" style="width: 32%">
+					<input id="two" value="2" type="button" onclick="calculator.calDisplay.value += 2" style="width: 32%">
+					<input id="three" value="3" type="button" onclick="calculator.calDisplay.value += 3" style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="four" value="4" type="button" onclick="calculator.calDisplay.value += 4" style="width: 32%">
+					<input id="five" value="5" type="button" onclick="calculator.calDisplay.value += 5" style="width: 32%">
+					<input id="six" value="6" type="button" onclick="calculator.calDisplay.value += 6" style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="seven" value="7" type="button" onclick="calculator.calDisplay.value += 7" style="width: 32%">
+					<input id="eight" value="8" type="button" onclick="calculator.calDisplay.value += 8" style="width: 32%">
+					<input id="nine" value="9" type="button" onclick="calculator.calDisplay.value += 9" style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="dot" value="." type="button" onclick="calculator.calDisplay.value += '.'" style="width: 32%">
+					<input id="zero" value="0" type="button" onclick="calculator.calDisplay.value += 0" style="width: 32%">
+					<input id="equals" value="=" type="button" onclick=calEquals() style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="addition" value="+" type="button" onclick=calAddition() style="width: 32%">
+					<input id="substraction" value="-" type="button" onclick=calSubstraction() style="width: 32%">
+					<input id="division" value="/" type="button" onclick=calDivision() style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input id="sqrt" value="sqrt" type="button" onclick=calSquareRoot() style="width: 32%">
+					<input id="expo" value="^" type="button" onclick=calExponential() style="width: 32%">
+					<input id="multiplication" value="*" type="button" onclick=calMultiplication() 
+						onkeypress=calMultiplication() style="width: 32%">
+				</td>
+			</tr>
+			<tr>
+				<td>
+					<input type="button" value="History" onclick=calRead() style="width:32%">
+					<input type="button" value="ClearAll" onclick=calClearAll() style="width:32%">
+					<input id="clear" value="C" type="button" onclick=calClear() style="width:32%">
+				</td>
+			</tr>
+		</table>
+	</form>
+</body>
+</html>
